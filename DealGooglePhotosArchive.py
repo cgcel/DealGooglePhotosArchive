@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding:utf-8 -*-
-# @Author  : gty0211@foxmail.com
+# @Author  : gty0211@foxmail.com, cgc.elvom@outlook.com
 import json
 import os
 import sys
@@ -10,62 +10,72 @@ import ffmpeg
 import piexif
 import hashlib
 from PIL import Image, UnidentifiedImageError
+from datetime import datetime, timedelta, timezone
+import pytz
 
-#归档zip解压目录
+# 归档zip解压目录
 scanDir = ''
 outPutDir = ''
-#获取文件MD5
+
+
+# 获取文件MD5
 def GetMD5FromFile(filename):
     file_object = open(filename, 'rb')
     file_content = file_object.read()
     file_object.close()
     file_md5 = hashlib.md5(file_content)
     return file_md5.hexdigest()
-#处理重复
+
+
+# 处理重复
 def dealDuplicate(delete=True):
     fileMD5List = {}
     dg = os.walk(scanDir)
-    DupDir = outPutDir + '/Duplicate/'  #重复文件存放文件夹
+    DupDir = os.path.join(outPutDir, 'Duplicate')  # 重复文件存放文件夹
     if not os.path.exists(DupDir):
         os.makedirs(DupDir)
 
-    for path,dir_list,file_list in dg:
+    for path, dir_list, file_list in dg:
         if path == DupDir:
             print('跳过 '+DupDir+' 文件夹')
-            continue;
+            continue
         for file_name in file_list:
             full_file_name = os.path.join(path, file_name)
             if file_name == '元数据.json':
                 continue
-            #处理重复文件
+            # 处理重复文件
             _md5 = GetMD5FromFile(full_file_name)
             if _md5 in fileMD5List.keys() and full_file_name != fileMD5List[_md5]:
                 if delete:
-                    os.remove(full_file_name) #这里可以直接删除
+                    os.remove(full_file_name)  # 这里可以直接删除
                 else:
                     if not os.path.exists(DupDir + file_name):
                         shutil.move(full_file_name, DupDir)
-                    else: #存在多个就删除
+                    else:  # 存在多个就删除
                         os.remove(full_file_name)
-                print('重复文件：' + full_file_name + ' ------ ' + fileMD5List[_md5])
+                print('重复文件：' + full_file_name +
+                      ' ------ ' + fileMD5List[_md5])
             else:
                 fileMD5List[_md5] = full_file_name
     fileMD5List.clear()
-#文件分类
+
+
+# 文件分类
 def dealClassify():
-    #部分文件变了，重新扫描
+    global jsonDir
+    # 部分文件变了，重新扫描
     g = os.walk(scanDir)
     for path, dir_list, file_list in g:
         for file_name in file_list:
             full_file_name = os.path.join(path, file_name)
-            #处理时长低于3s的视频
+            # 处理时长低于3s的视频
             if os.path.splitext(file_name)[-1] == '.MOV':
                 print('根据时长分类文件：' + full_file_name)
                 info = ffmpeg.probe(full_file_name)
-                #print(info)
-                duration = info['format']['duration'] #时长
+                # print(info)
+                duration = info['format']['duration']  # 时长
                 if float(duration) <= 2:
-                    under2Dir = outPutDir + '/under2/'
+                    under2Dir = os.path.join(outPutDir, 'under2')
                     if not os.path.exists(under2Dir):
                         print('创建文件夹：' + under2Dir)
                         os.makedirs(under2Dir)
@@ -73,79 +83,88 @@ def dealClassify():
                         shutil.move(full_file_name, under2Dir)
 
                 elif 2 < float(duration) <= 3:
-                    under3Dir = outPutDir + '/under3/'
+                    under3Dir = os.path.join(outPutDir, 'under3')
                     if not os.path.exists(under3Dir):
                         print('创建文件夹：' + under3Dir)
                         os.makedirs(under3Dir)
                     if not os.path.exists(under3Dir + file_name):
                         shutil.move(full_file_name, under3Dir)
-            #处理HEIC文件
+            # 处理HEIC文件
             elif os.path.splitext(file_name)[-1] == '.HEIC':
-                heicDir = outPutDir + '/HEIC/'
+                heicDir = os.path.join(outPutDir, 'HEIC')
                 if not os.path.exists(heicDir):
                     os.makedirs(heicDir)
                 if not os.path.exists(heicDir + file_name):
                     shutil.move(full_file_name, heicDir)
-            #单独存储json文件
+            # 单独存储json文件
             elif os.path.splitext(file_name)[-1] == '.json':
-                jsonDir = outPutDir + '/json/'
+                jsonDir = os.path.join(outPutDir, 'json')
                 if not os.path.exists(jsonDir):
                     os.makedirs(jsonDir)
                 if not os.path.exists(jsonDir + file_name):
                     shutil.move(full_file_name, jsonDir)
-            #其他文件存储到Photos文件夹
+            # 其他文件存储到Photos文件夹
             else:
-                photosDir = outPutDir + '/Photos/'
+                photosDir = os.path.join(outPutDir, 'Photos')
                 if not os.path.exists(photosDir):
                     os.makedirs(photosDir)
                 if not os.path.exists(photosDir + file_name):
                     shutil.move(full_file_name, photosDir)
-#计算lat/lng信息
+
+
+# 计算lat/lng信息
 def format_latlng(latlng):
     degree = int(latlng)
     res_degree = latlng - degree
     minute = int(res_degree * 60)
     res_minute = res_degree * 60 - minute
-    seconds = round(res_minute * 60.0,3)
+    seconds = round(res_minute * 60.0, 3)
 
     return ((degree, 1), (minute, 1), (int(seconds * 1000), 1000))
-#读json
+
+
+# 读json
 def readJson(json_file):
-    with open(json_file, 'r',encoding='UTF-8') as load_f:
+    with open(json_file, 'r', encoding='UTF-8') as load_f:
         return json.load(load_f)
-#处理照片exif信息
-def dealExif():
+
+
+# 处理照片exif信息
+def dealExif(tz: pytz):
     g = os.walk(scanDir)
-    for path,dir_list,file_list in g:
+    for path, dir_list, file_list in g:
         for file_name in file_list:
             full_file_name = os.path.join(path, file_name)
             ext_name = os.path.splitext(file_name)[-1]
-            if ext_name.lower() in ['.jpg','.jpeg','.png']:
-                # if file_name != 'ee7db1e41afc9fd342e42e0a5034006b.JPG':   #   单文件测试
-                #     continue
+            if ext_name.lower() in ['.jpg', '.jpeg', '.png']:
 
-                if not os.path.exists(outPutDir + '/json/' + file_name + '.json'):
-                    continue
-                exifJson = readJson(outPutDir + '/json/' + file_name + '.json')
-                print('处理Exif：' + full_file_name)
+                if os.path.exists(os.path.join(jsonDir, file_name + '.json')):
+                    exifJson = readJson(os.path.join(
+                        jsonDir, file_name + '.json'))
+                    print('处理Exif：' + full_file_name)
                 try:
                     img = Image.open(full_file_name)  # 读图
                     exif_dict = piexif.load(img.info['exif'])
                     # 修改exif数据
                     if 'photoTakenTime' in exifJson.keys():
-                        exif_dict['0th'][piexif.ImageIFD.DateTime] = time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(int(exifJson['photoTakenTime']['timestamp']))).encode('utf-8')
+                        exif_dict['Exif'][piexif.ExifIFD.DateTimeOriginal] = datetime.fromtimestamp(int(
+                            exifJson['photoTakenTime']['timestamp'])).replace(tzinfo=pytz.FixedOffset(960)).astimezone(tz).strftime("%Y:%m:%d %H:%M:%S").encode('utf-8')
                     if 'creationTime' in exifJson.keys():
-                        exif_dict['Exif'][piexif.ExifIFD.DateTimeOriginal] = time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(int(exifJson['creationTime']['timestamp']))).encode('utf-8')
+                        exif_dict['0th'][piexif.ImageIFD.DateTime] = datetime.fromtimestamp(int(exifJson['creationTime']['timestamp'])).replace(tzinfo=pytz.FixedOffset(960)).astimezone(tz).strftime(
+                            "%Y:%m:%d %H:%M:%S").encode('utf-8')
                     if 'photoLastModifiedTime' in exifJson.keys():
-                        exif_dict['Exif'][piexif.ExifIFD.DateTimeDigitized] = time.strftime("%Y:%m:%d %H:%M:%S", time.localtime(int(exifJson['creationTime']['timestamp']))).encode('utf-8')
+                        exif_dict['Exif'][piexif.ExifIFD.DateTimeDigitized] = datetime.fromtimestamp(int(exifJson['creationTime']['timestamp'])).replace(tzinfo=pytz.FixedOffset(960)).astimezone(tz).strftime(
+                            "%Y:%m:%d %H:%M:%S").encode('utf-8')
                     if 'geoDataExif' in exifJson.keys():
-                        exif_dict['GPS'][piexif.GPSIFD.GPSLatitude] = format_latlng(exifJson['geoDataExif']['latitude'])
-                        exif_dict['GPS'][piexif.GPSIFD.GPSLongitude] = format_latlng(exifJson['geoDataExif']['longitude'])
+                        exif_dict['GPS'][piexif.GPSIFD.GPSLatitude] = format_latlng(
+                            exifJson['geoDataExif']['latitude'])
+                        exif_dict['GPS'][piexif.GPSIFD.GPSLongitude] = format_latlng(
+                            exifJson['geoDataExif']['longitude'])
                     # exif_dict['GPS'][piexif.GPSIFD.GPSLongitudeRef] = 'W'
                     # exif_dict['GPS'][piexif.GPSIFD.GPSLatitudeRef] = 'N'
                     exif_bytes = piexif.dump(exif_dict)
                     img.save(full_file_name, None, exif=exif_bytes)
-                    #修改文件时间（可选）
+                    # 修改文件时间（可选）
                     # photoTakenTime = time.strftime("%Y%m%d%H%M.%S", time.localtime(int(exifJson['photoTakenTime']['timestamp'])))
                     # os.system('touch -t "{}" "{}"'.format(photoTakenTime, full_file_name))
                     # os.system('touch -mt "{}" "{}"'.format(photoTakenTime, full_file_name))
@@ -163,27 +182,32 @@ def dealExif():
                     continue
                     # exif_dict = {'0th':{},'Exif': {},'GPS': {}}
 
-#check
+
+# check
 def check():
     global outPutDir
+    outPutDir = os.path.join(scanDir, outPutDir)
     if scanDir == r'/Users/XXX/Downloads/Takeout':
         print("\033[31mPlease modify scanDir\033[0m")
         print("\033[31m请修改scanDir变量你的归档解压文件夹路径\033[0m")
         sys.exit()
-    if not os.path.exists(scanDir + outPutDir):
-        os.makedirs(scanDir + outPutDir)
+    if not os.path.exists(outPutDir):
+        os.makedirs(outPutDir)
     else:
-        print("\033[31m请先移除路径\033[0m" + " \033[31m" + scanDir + outPutDir +"\033[0m" + " \033[31m避免重复扫描\033[0m" )
+        print("\033[31m请先移除路径\033[0m" + " \033[31m" + scanDir +
+              outPutDir + "\033[0m" + " \033[31m避免重复扫描\033[0m")
         sys.exit()
-    outPutDir = scanDir + outPutDir            
+    # outPutDir = os.path.join(scanDir, outPutDir)
 
 
 if __name__ == '__main__':
-    scanDir = r'/Users/XXX/Downloads/Takeout' #TODO 这里修改归档的解压目录
-    outPutDir = '/DealGoogleOutput'
+    scanDir = r'D:\downloads\Takeout'  # TODO 这里修改归档的解压目录
+    outPutDir = 'DealGoogleOutput'
+    
+    tz = pytz.timezone("Asia/Hong_Kong")
     check()
     dealDuplicate()
     dealClassify()
-    dealExif()
+    dealExif(tz=tz)
     print('处理完成，文件输出在：' + outPutDir)
     # print('终于搞完了，Google Photos 辣鸡')
