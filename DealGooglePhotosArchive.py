@@ -72,7 +72,7 @@ class DealGooglePhotosArchive(object):
                     if delete:
                         os.remove(full_file_name)  # 这里可以直接删除
                     else:
-                        if not os.path.exists(self.DupDir + file_name):
+                        if not os.path.exists(os.path.join(self.DupDir, file_name)):
                             shutil.move(full_file_name, self.DupDir)
                         else:  # 存在多个就删除
                             os.remove(full_file_name)
@@ -102,7 +102,7 @@ class DealGooglePhotosArchive(object):
                         if not os.path.exists(self.under2Dir):
                             print('创建文件夹：' + self.under2Dir)
                             os.makedirs(self.under2Dir)
-                        if not os.path.exists(self.under2Dir + file_name):
+                        if not os.path.exists(os.path.join(self.under2Dir, file_name)):
                             shutil.move(full_file_name, self.under2Dir)
 
                     elif 2 < float(duration) <= 3:
@@ -110,28 +110,28 @@ class DealGooglePhotosArchive(object):
                         if not os.path.exists(self.under3Dir):
                             print('创建文件夹：' + self.under3Dir)
                             os.makedirs(self.under3Dir)
-                        if not os.path.exists(self.under3Dir + file_name):
+                        if not os.path.exists(os.path.join(self.under3Dir, file_name)):
                             shutil.move(full_file_name, self.under3Dir)
                 # 处理HEIC文件
                 elif os.path.splitext(file_name)[-1] == '.HEIC':
                     
                     if not os.path.exists(self.heicDir):
                         os.makedirs(self.heicDir)
-                    if not os.path.exists(self.heicDir + file_name):
+                    if not os.path.exists(os.path.join(self.heicDir, file_name)):
                         shutil.move(full_file_name, self.heicDir)
                 # 单独存储json文件
                 elif os.path.splitext(file_name)[-1] == '.json':
                     
                     if not os.path.exists(self.jsonDir):
                         os.makedirs(self.jsonDir)
-                    if not os.path.exists(self.jsonDir + file_name):
+                    if not os.path.exists(os.path.join(self.jsonDir, file_name)):
                         shutil.move(full_file_name, self.jsonDir)
                 # 其他文件存储到Photos文件夹
                 else:
                     
                     if not os.path.exists(self.photosDir):
                         os.makedirs(self.photosDir)
-                    if not os.path.exists(self.photosDir + file_name):
+                    if not os.path.exists(os.path.join(self.photosDir, file_name)):
                         shutil.move(full_file_name, self.photosDir)
 
 
@@ -229,12 +229,12 @@ class DealGooglePhotosArchive(object):
                             takenMonth = str(takenDate.month)
 
                             targetPath = os.path.join(
-                                outPutDir, takenYear, takenMonth)
+                                self.outPutDir, takenYear, takenMonth)
                             self.copy_to_target(
                                 file_name=file_name, file_source_path=full_file_name, file_target_path=targetPath)
                         except Exception as e:
                             print(e)
-                            targetPath = os.path.join(outPutDir, 'failedPic')
+                            targetPath = os.path.join(self.outPutDir, 'failedPic')
                             self.copy_to_target(
                                 file_name=file_name, file_source_path=full_file_name, file_target_path=targetPath)
 
@@ -251,7 +251,7 @@ class DealGooglePhotosArchive(object):
                                 dtYear = str(dt.year)
                                 dtMonth = str(dt.month)
                                 targetPath = os.path.join(
-                                    outPutDir, dtYear, dtMonth)
+                                    self.outPutDir, dtYear, dtMonth)
                                 self.copy_to_target(
                                     file_name=file_name, file_source_path=full_file_name, file_target_path=targetPath)
 
@@ -262,7 +262,7 @@ class DealGooglePhotosArchive(object):
                                 dtYear = str(dt.year)
                                 dtMonth = str(dt.month)
                                 targetPath = os.path.join(
-                                    outPutDir, dtYear, dtMonth)
+                                    self.outPutDir, dtYear, dtMonth)
                                 self.copy_to_target(
                                     file_name=file_name, file_source_path=full_file_name, file_target_path=targetPath)
 
@@ -305,15 +305,15 @@ class DealGooglePhotosArchive(object):
         return outPutDir
 
 if __name__ == '__main__':
-    scanDir = r'D:\download\Takeout'  # TODO 这里修改归档的解压目录
+    scanDir = r'D:\download\baiduyun_photos'  # TODO 这里修改归档的解压目录
     
 
     DEAL = DealGooglePhotosArchive(scanDir=scanDir)
 
     # 根据对应功能自行使用以下函数
-    DEAL.dealDuplicate()
+    # DEAL.dealDuplicate()
     DEAL.dealClassify()
-    DEAL.dealExif()
+    # DEAL.dealExif()
     DEAL.dealSortByDate()
 
     print('处理完成，文件输出在：' + outPutDir)
